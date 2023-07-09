@@ -231,7 +231,7 @@ namespace wpCloud\StatelessMedia {
             $file_size = filesize($args['absolutePath']);
             $filetoupload = array('name' => $name, 'uploadType' => 'resumable');
             $request = $this->service->objects->insert($this->bucket, $media, $filetoupload);
-            $uploader = new \Google_Http_MediaFileUpload($this->client, $request, $args['mimeType'], null, true, WP_STATELESS_MEDIA_UPLOAD_CHUNK_SIZE);
+            $uploader = new \Google\Google_Http_MediaFileUpload($this->client, $request, $args['mimeType'], null, true, WP_STATELESS_MEDIA_UPLOAD_CHUNK_SIZE);
             $uploader->setFileSize($file_size);
             $handle = fopen($args['absolutePath'], "rb");
 
@@ -250,15 +250,25 @@ namespace wpCloud\StatelessMedia {
             // Reset to the client to execute requests immediately in the future.
             $this->client->setDefer(false);
           } else {
-            $media = $this->service->objects->insert($this->bucket, $media, array_filter(array(
+            $mediaOptions = array(
               'data' => file_get_contents($args['absolutePath']),
               'uploadType' => 'media',
               'mimeType' => $args['mimeType'],
-              'predefinedAcl' => 'bucketOwnerFullControl',
-            )));
+            );
+
+            // print WP_STATELESS_SKIP_ACL_SET state
+            // echo "WP_STATELESS_SKIP_ACL_SET: " . WP_STATELESS_SKIP_ACL_SET . "\n";
+
+            if (defined('WP_STATELESS_SKIP_ACL_SET') && !WP_STATELESS_SKIP_ACL_SET) {
+              $mediaOptions['predefinedAcl'] = 'bucketOwnerFullControl';
+            }
+
+            $media = $this->service->objects->insert($this->bucket, $media, array_filter($mediaOptions));
           }
 
-          $this->mediaInsertACL($name, $media, $args);
+          if (defined('WP_STATELESS_SKIP_ACL_SET') && !WP_STATELESS_SKIP_ACL_SET) {
+            $this->mediaInsertACL($name, $media, $args);
+          }
         } catch (Exception $e) {
           return new WP_Error('sm_error', $e->getMessage());
         }
